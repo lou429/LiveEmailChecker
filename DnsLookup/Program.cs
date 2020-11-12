@@ -16,17 +16,106 @@ namespace DnsLookup
 {
     class Program
     {
+        public static Data Data;
         static void Main(string[] args)
         {
             //CheckDns();
-
+            try
+            {
+                Data = new JsonParser().Load;
+            }
+            catch(Exception ex)
+            {
+                Debug.WriteLine(ex.Message);
+            }
             Dictionary<string, List<string>> mxRecords = new Dictionary<string, List<string>>();
 
-            //mxRecords.Add("cpship", GetMxRecord("cpship.co.uk"));
-            //mxRecords.Add("oytsouth", GetMxRecord("oytsouth.org"));
-            //mxRecords.Add("Smartcrosby", GetMxRecord("Smartcrosby.com"));
+            //Add existing output to output list to save old records
+            List<Email> checkedEmails = new List<Email>();
+            try
+            {
+                using (var reader = new StreamReader("Live Emails.csv"))
+                    using (var csv = new CsvReader(reader, CultureInfo.InvariantCulture))
+                    {
+                        csv.Configuration.HasHeaderRecord = true;
+                        csv.Configuration.MissingFieldFound = null;
+                        csv.Configuration.RegisterClassMap<EmailReadMap>();
+                        checkedEmails.AddRange(csv.GetRecords<Email>().ToList());
+                    }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine(ex.Message);
+            }
 
-            mxRecords = GetMxRecords();
+            Console.WriteLine($"\nLoaded {checkedEmails.Count} existing records");
+
+            //Load all emails that need to be checked
+            List<Email> emailsToCheck = new List<Email>();
+            using (var reader = new StreamReader("Emails To Check.csv"))
+                using (var csv = new CsvReader(reader, CultureInfo.InvariantCulture))
+                {
+                    csv.Configuration.HasHeaderRecord = true;
+                    csv.Configuration.MissingFieldFound = null;
+                    csv.Configuration.RegisterClassMap<EmailReadMap>();
+                    emailsToCheck.AddRange(csv.GetRecords<Email>().ToList());
+                }
+
+            var tempList = new List<Email>();
+            foreach (var email in emailsToCheck)
+                if (email.EmailAddress != "" && email.DomainName == "" && email.FirstName == "" && email.LastName == "")
+                    tempList.Add(new Email(email.EmailAddress));
+                else
+                    tempList.Add(email);
+
+            emailsToCheck = tempList;
+
+
+            List<IgnoredEmails> ignorePrefix = new List<IgnoredEmails>();
+            try
+            {
+                using (var reader = new StreamReader("Ignore Names.csv"))
+                    using (var csv = new CsvReader(reader, CultureInfo.InvariantCulture))
+                    {
+                        csv.Configuration.HasHeaderRecord = true;
+                        csv.Configuration.MissingFieldFound = null;
+                        csv.Configuration.RegisterClassMap<IgnoredEmailsMap>();
+                        ignorePrefix.AddRange(csv.GetRecords<IgnoredEmails>().ToList());
+                    }
+
+                if (ignorePrefix.Count > 0)
+                {
+                    tempList = emailsToCheck;
+                    foreach (var email in emailsToCheck.ToList())
+                        foreach (var prefix in ignorePrefix)
+                            if (returnName(email.EmailAddress) == prefix.Name)
+                                tempList.Remove(email);
+
+                    emailsToCheck = tempList;
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine(ex.Message);
+            }
+
+
+            //Remove emails that already have been checked
+            try
+            {
+                var tempCheckList = checkedEmails;
+                foreach (var existingEmail in tempCheckList)
+                    foreach (var email in emailsToCheck)
+                        if (existingEmail == email)
+                            Console.WriteLine($"Removed {email.EmailAddress} : x{checkedEmails.RemoveAll(x => x.EmailAddress == email.EmailAddress)}");
+                checkedEmails.Distinct().ToList();
+            }
+            catch(Exception ex)
+            {
+                Debug.WriteLine(ex.Message);
+            }
+
+            mxRecords = GetMxRecords(ref emailsToCheck);
 
             foreach (var record in mxRecords)
             {
@@ -39,97 +128,87 @@ namespace DnsLookup
                         Console.WriteLine(mxRecord);
                 }
             }
-
+            var newlyAddedCounter = 0;
             mxRecords = getTcpInfo(mxRecords);
-
-            //Add existing output to output list to save old records
-            List<EmailCheck> emailOutput = new List<EmailCheck>();
-            using (var reader = new StreamReader("active emails.csv"))
-                using(var csv = new CsvReader(reader, CultureInfo.InvariantCulture))
-                {
-                    csv.Configuration.HasHeaderRecord = true;
-                    csv.Configuration.MissingFieldFound = null;
-                    csv.Configuration.RegisterClassMap<EmailCheckMap>();
-                    emailOutput.AddRange(csv.GetRecords<EmailCheck>().ToList());
-                }
-
-            Console.WriteLine($"\nLoaded {emailOutput.Count} existing records");
-
-
-            //Load all emails that need to be checked
-            List<EmailRead> emailInput = new List<EmailRead>();
-            using (var reader = new StreamReader("Emails To Check.csv"))
-                using (var csv = new CsvReader(reader, CultureInfo.InvariantCulture))
-                {
-                    csv.Configuration.HasHeaderRecord = true;
-                    csv.Configuration.MissingFieldFound = null;
-                    csv.Configuration.RegisterClassMap<EmailReadMap>();
-                    emailInput.AddRange(csv.GetRecords<EmailRead>().ToList());
-                }
-
             //Check emails against domain to see if they match, then run telnet
-            Console.WriteLine($"\nChecking 0/{emailInput.Count}");
-            foreach (var input in emailInput)
+            //Console.WriteLine($"\nChecking 0/{emailsToCheck.Count}");
+            foreach(var email in emailsToCheck)
             {
-                string email = input.EmailAddress;
-                string domain = ReturnDomain(email);
-                Console.WriteLine($"Checking {emailInput.IndexOf(input)}/{emailInput.Count}\nEmail: {email}");
+                Console.WriteLine($"Checking {emailsToCheck.IndexOf(email) + 1}/{emailsToCheck.Count}\nEmail: {email.EmailAddress}");
 
-                if (!mxRecords.ContainsKey(domain))
+                try
                 {
-                    var templist = GetMxRecord(domain);
-                    if(templist.Count > 0)
-                        mxRecords.Add(domain, templist);
-                }
-
-                if (mxRecords.ContainsKey(domain))
-                    foreach (var mxRecord in mxRecords[domain])
+                    foreach (var tcpRecord in mxRecords[email.DomainName])
                     {
-                        Thread.Sleep(20);
-                        if (IsEmailAccountValid(mxRecord, email))
+                        Func<bool> telnetCheck = new Func<bool>(() => IsEmailAccountValid(new TCPClient(tcpRecord, email.EmailAddress)));
+                        if (RunTaskWithTimeout(telnetCheck, 10))
                         {
-                            emailOutput.Add(new EmailCheck(email, "Success"));
+                            checkedEmails.Add(email);
+                            newlyAddedCounter++;
+                            Thread.Sleep(20);
                             break;
                         }
                     }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Skipped domain {email.DomainName}\nNot in domain list");
+                    Debug.WriteLine(ex.Message);
+                }
             }
 
-            Console.WriteLine($"\nDomains for emails found {emailOutput.Count}/{emailInput.Count}\nMissing: {emailInput.Count - emailOutput.Count}");
+            Console.WriteLine($"\nDomains for emails found {checkedEmails.Count}/{emailsToCheck.Count}\nMissing: {emailsToCheck.Count - newlyAddedCounter}");
 
+            checkedEmails = checkedEmails.Distinct().ToList();
 
-            Console.WriteLine($"\nSaving {emailOutput.Count} records");
-            using (var writer = new StreamWriter("active emails.csv"))
-            using (var csv = new CsvWriter(writer, CultureInfo.InvariantCulture))
-            {
-                csv.WriteRecords(emailOutput);
-            }
+            using (var writer = new StreamWriter("Live Emails.csv"))
+                using (var csv = new CsvWriter(writer, CultureInfo.InvariantCulture))
+                    csv.WriteRecords(checkedEmails);
 
+            Console.WriteLine($"\nSaved {checkedEmails.Count} records");
             Console.WriteLine("Program ended\nRead key");
+
+            Data = new Data(mxRecords, checkedEmails, emailsToCheck, ignorePrefix);
+            new JsonParser().Save(Data);
             Console.ReadKey(true);
         }
 
+        private static string returnName(string emailAddress)
+        {
+            try
+            {
+                return emailAddress.Substring(0,emailAddress.IndexOf("@"));
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine(ex.Message);
+                return "";
+            }
+        }
+
+        /// <summary>
+        /// Return the domain of an email address
+        /// </summary>
+        /// <param name="email">Email address</param>
+        /// <returns></returns>
         public static string ReturnDomain(string email)
         {
-            if (email.Contains("@"))
+            try
             {
-                int firstIndex = email.IndexOf("@") + 1;
-                int lastIndex = email.Length;
-                email = email.Substring(firstIndex, lastIndex - firstIndex);
+                return email.Substring(email.IndexOf("@") + 1);
             }
-            return email;
+            catch (Exception ex)
+            {
+                Debug.WriteLine(ex.Message);
+                return "";
+            }
         }
 
-        public static string ReturnNxRecord(string nxRecord)
-        {
-            if(nxRecord.Contains(" "))
-            {
-
-            }
-
-
-            return nxRecord;
-        }
-
+        /// <summary>
+        /// Return TCP info from MX Records
+        /// </summary>
+        /// <param name="mxRecords">Mx Record list</param>
+        /// <returns></returns>
         public static Dictionary<string, List<string>> getTcpInfo(Dictionary<string, List<string>> mxRecords)
         {
             var result = new Dictionary<string, List<string>>();
@@ -159,9 +238,12 @@ namespace DnsLookup
             return result;
         }
 
+        /// <summary>
+        /// Return DNS records of certain domain
+        /// </summary>
         static void CheckDns()
         {
-            using (var reader = new StreamReader(@"C:\domains.csv"))
+            using (var reader = new StreamReader(@"domains.csv"))
             {
                 while (!reader.EndOfStream)
                 {
@@ -169,12 +251,17 @@ namespace DnsLookup
                     var dnsVal = value[0];
                     string output = PowerShellCommand($"nslookup {dnsVal}");
                     output = output.Replace("Server:  UnKnown", "");
-                    Console.WriteLine($"----------------\n{output}");
+                    Console.WriteLine($"\n----------------\n{output}");
                     Thread.Sleep(100);
                 }
             }
         }
 
+        /// <summary>
+        /// Run a hidden powershell window
+        /// </summary>
+        /// <param name="dns">Address of DNS</param>
+        /// <returns>Return Powershell output</returns>
         static string PowerShellCommand(string dns)
         {
             var psCommandBase64 = Convert.ToBase64String(Encoding.Unicode.GetBytes(dns));
@@ -201,29 +288,71 @@ namespace DnsLookup
             return output;
         }
 
-        static public Dictionary<string, List<string>> GetMxRecords()
+        /// <summary>
+        /// Return a list of MX records
+        /// </summary>
+        /// <param name="emailList">List of eamils to check MX records from</param>
+        /// <returns></returns>
+        static public Dictionary<string, List<string>> GetMxRecords(ref List<Email> emailList)
         {
             var OutputList = new Dictionary<string, List<string>>();
-            var InputList = new List<string>();
+            var ExcludedDomainsList = new List<string>();
 
-            using (var reader = new StreamReader(@"C:\Users\sebastianb\OneDrive - Millennium Ltd\Documents\New Domains.csv"))
+            try
             {
-                while (!reader.EndOfStream)
+                using (var reader = new StreamReader(@"Ignored Domains.csv"))
                 {
-                    var value = reader.ReadLine().Split(";");
-                    InputList.Add(value[0]);
+                    while (!reader.EndOfStream)
+                    {
+                        var value = reader.ReadLine().Split(";");
+                        ExcludedDomainsList.Add(value[0]);
+                    }
                 }
+            }   
+            catch (Exception ex)
+            {
+                Debug.WriteLine(ex);
             }
 
-            if(InputList.Contains("Domain"))
-                InputList.Remove("Domain");
+            var domainList = new List<string>();
 
-            foreach (var record in InputList)
+            foreach (var email in emailList)
+                domainList.Add(ReturnDomain(email.EmailAddress));
+
+            domainList = domainList.Distinct().ToList();
+
+            //Remove domains that are in the excluded list
+            var tempDomainList = domainList;
+            var removedDomainsList = new List<string>();
+
+            if (ExcludedDomainsList != null)
+                foreach (var excludedDomain in ExcludedDomainsList)
+                    foreach (var domain in domainList.ToList().Where(domain => excludedDomain == domain))
+                    {
+                        tempDomainList.Remove(domain);
+                        removedDomainsList.Add(domain);
+                    }
+
+            Console.WriteLine($"Removed {domainList.Count - tempDomainList.Count} domains");
+            domainList = tempDomainList;
+
+            var tempEmailList = emailList;
+
+            foreach (var email in emailList.ToList())
+                foreach (var removedDomain in removedDomainsList)
+                    if (ReturnDomain(email.EmailAddress) == removedDomain)
+                        tempEmailList.Remove(email);
+
+            Console.WriteLine($"Removed {emailList.Count - tempEmailList.Count} emails");
+            emailList = tempEmailList;
+
+            foreach (var record in domainList)
             {
                 try
                 {
-                    string rec = ReturnDomain(record);
-                    OutputList.Add(rec, GetMxRecord(rec));
+                    //string rec = ReturnDomain(record);
+                    Func<List<string>> getMxRecords = new Func<List<string>>(() => GetMxRecord(record));
+                    OutputList.Add(record, RunTaskWithTimeout(getMxRecords, 10) ?? new List<string>() { "No records" });
                 }
                 catch (Exception ex)
                 {
@@ -234,16 +363,21 @@ namespace DnsLookup
             return OutputList;
         }
 
-        private static List<string> GetMxRecord(string val)
+        /// <summary>
+        /// Get a single MX record
+        /// </summary>
+        /// <param name="domain">Domain name</param>
+        /// <returns>List of MX records for domain</returns>
+        private static List<string> GetMxRecord(string domain)
         {
             var lookup = new LookupClient();
             try
             {
-                Console.WriteLine($"NX Lookup of: {val}");
-                var result = lookup.QueryAsync(val, QueryType.ANY).Result;
+                Console.WriteLine($"\n-------------------------\nMX Lookup of: {domain}");
+                var result = lookup.QueryAsync(domain, QueryType.ANY).Result;
                 List<string> mxRecords = new List<string>();
                 foreach (var record in result.AllRecords)
-                    if (record.ToString().Contains("MX"))
+                    if (record.ToString().Contains(" MX "))
                     {
                         mxRecords.Add(record.ToString());
                         Console.WriteLine($"{record.ToString()}");
@@ -258,9 +392,20 @@ namespace DnsLookup
                 return new List<string>();
             }
         }
+
+        /// <summary>
+        /// Return Bytes from a string
+        /// </summary>
+        /// <param name="str">String to return bytes</param>
+        /// <returns>Bytes</returns>
         private static byte[] BytesFromString(string str) => Encoding.ASCII.GetBytes(str);
 
 
+        /// <summary>
+        /// Parse response code from telnet commands
+        /// </summary>
+        /// <param name="ResponseString">Response code</param>
+        /// <returns>Output of response code</returns>
         private static int GetResponseCode(string ResponseString)
         {
             if (ResponseString != null)
@@ -269,7 +414,14 @@ namespace DnsLookup
                 return 550;
         }
 
-        private T RunTaskWithTimeout<T>(Func<T> TaskAction, int TimeoutSeconds)
+        /// <summary>
+        /// Run any method with a time out
+        /// </summary>
+        /// <typeparam name="T">Data type to return</typeparam>
+        /// <param name="TaskAction">Delegate of function to return</param>
+        /// <param name="TimeoutSeconds">Number of seconds to wait before timeout</param>
+        /// <returns></returns>
+        static private T RunTaskWithTimeout<T>(Func<T> TaskAction, int TimeoutSeconds)
         {
             Task<T> backgroundTask;
 
@@ -281,7 +433,7 @@ namespace DnsLookup
             catch (AggregateException ex)
             {
                 // task failed
-                var failMessage = ex.Flatten().InnerException.Message);
+                var failMessage = ex.Flatten().InnerException.Message;
                 return default(T);
             }
             catch (Exception ex)
@@ -301,6 +453,11 @@ namespace DnsLookup
             return backgroundTask.Result;
         }
 
+        /// <summary>
+        /// Clean up record to get a clean MX record to parse with TCP client
+        /// </summary>
+        /// <param name="record">MX Record</param>
+        /// <returns>MX record address</returns>
         private static string CleanRecord(string record)
         {
             var charArr = record.ToCharArray();
@@ -319,12 +476,17 @@ namespace DnsLookup
             return record;
         }
 
-        private static bool IsEmailAccountValid(string tcpClient, string emailAddress)
+        /// <summary>
+        /// Telnet to verify if client exists
+        /// </summary>
+        /// <param name="tcpClient">TCP Client</param>
+        /// <returns>If account is alive</returns>
+        private static bool IsEmailAccountValid(TCPClient tcpClient)
         {
             try
             {
-                tcpClient = CleanRecord(tcpClient);
-                TcpClient tClient = new TcpClient(tcpClient, 25);
+                tcpClient.TcpInfo = CleanRecord(tcpClient.TcpInfo);
+                TcpClient tClient = new TcpClient(tcpClient.TcpInfo, 25);
                 string CRLF = "\r\n";
                 byte[] dataBuffer;
                 string ResponseString;
@@ -333,7 +495,7 @@ namespace DnsLookup
                 ResponseString = reader.ReadLine();
                 Console.WriteLine(ResponseString);
 
-                Console.WriteLine($"\nEmail account: {emailAddress}");
+                Console.WriteLine($"\nEmail account: {tcpClient.EmailAddress}");
 
                 /* Perform HELO to SMTP Server and get Response */
                 dataBuffer = BytesFromString("HELO" + CRLF);
@@ -345,7 +507,7 @@ namespace DnsLookup
                 Console.WriteLine(ResponseString);
 
                 /* Read Response of the RCPT TO Message to know from google if it exist or not */
-                dataBuffer = BytesFromString($"RCPT TO:<{emailAddress}>" + CRLF);
+                dataBuffer = BytesFromString($"RCPT TO:<{tcpClient.EmailAddress}>" + CRLF);
                 netStream.Write(dataBuffer, 0, dataBuffer.Length);
                 ResponseString = reader.ReadLine();
                 Console.WriteLine(ResponseString);
@@ -353,7 +515,7 @@ namespace DnsLookup
                 var responseCode = GetResponseCode(ResponseString);
                 Console.WriteLine(responseCode);
 
-                if (responseCode == 550)
+                if (responseCode > 420)
                     return false;
 
                 /* QUIT CONNECTION */
