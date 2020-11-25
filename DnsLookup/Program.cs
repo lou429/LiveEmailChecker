@@ -122,8 +122,7 @@ namespace DnsLookup
                     foreach (var tcpRecord in mxRecords[email.DomainName])
                     {
                         Func<bool> telnetCheck = new Func<bool>(() => IsEmailAccountValid(new TCPClient(tcpRecord, email.EmailAddress)));
-                        //if (RunTaskWithTimeout(telnetCheck, 10))
-                        if(true)
+                        if (RunTaskWithTimeout(telnetCheck, 10))
                         {
                             checkedEmails.Add(new EmailOutput(email));
                             newlyAddedCounter++;
