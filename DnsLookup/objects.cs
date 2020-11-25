@@ -111,7 +111,8 @@ namespace DnsLookup
         public EmailOutput(Email email)
         {
             EmailAddress = email.EmailAddress;
-            CompanyName = email.DomainName.GetTitle().ClearTitleResult();
+            //CompanyName = email.DomainName.GetTitle().ClearTitleResult();
+            CompanyName = email.DomainName;
             FirstName = email.FirstName;
             LastName = email.LastName;
         }
