@@ -11,7 +11,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 
-namespace DnsLookup
+namespace Email_Lookup_WPF
 {
     public struct Data
     {
@@ -146,6 +146,7 @@ namespace DnsLookup
         {
             return title;
         }
+        public static string ReturnPrefix(this string email) => email.Substring(0, email.IndexOf("@"));
     }
 
 
@@ -213,11 +214,9 @@ namespace DnsLookup
     {
         public static List<Email> LoadEmail(string fileName)
         {
-            if (!fileName.EndsWith(".csv"))
-                fileName += ".csv";
             try
             {
-                using (var reader = new StreamReader($"CSV/{fileName}"))
+                using (var reader = new StreamReader(fileName))
                     using (var csv = new CsvReader(reader, CultureInfo.InvariantCulture))
                     {
                         csv.Configuration.HasHeaderRecord = true;
@@ -235,11 +234,9 @@ namespace DnsLookup
 
         public static List<EmailOutput> LoadEmailOutput(string fileName)
         {
-            if (!fileName.EndsWith(".csv"))
-                fileName += ".csv";
             try
             {
-                using (var reader = new StreamReader($"CSV/{fileName}"))
+                using (var reader = new StreamReader(fileName))
                 using (var csv = new CsvReader(reader, CultureInfo.InvariantCulture))
                 {
                     csv.Configuration.HasHeaderRecord = true;
@@ -257,11 +254,9 @@ namespace DnsLookup
 
         public static List<IgnoredEmails> LoadDomain(string fileName)
         {
-            if (!fileName.EndsWith(".csv"))
-                fileName += ".csv";
             try
             {
-                using (var reader = new StreamReader($"CSV/{fileName}"))
+                using (var reader = new StreamReader(fileName))
                 using (var csv = new CsvReader(reader, CultureInfo.InvariantCulture))
                 {
                     csv.Configuration.HasHeaderRecord = true;
@@ -279,11 +274,9 @@ namespace DnsLookup
 
         public static void SaveToCsv(this List<EmailOutput> emailList, string fileName)
         {
-            if (!fileName.EndsWith(".csv"))
-                fileName += ".csv";
             try
             {
-                using (var writer = new StreamWriter($"CSV/{fileName}"))
+                using (var writer = new StreamWriter(fileName))
                     using (var csv = new CsvWriter(writer, CultureInfo.InvariantCulture))
                         csv.WriteRecords(emailList);
             }

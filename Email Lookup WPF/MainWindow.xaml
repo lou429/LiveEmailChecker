@@ -1,0 +1,20 @@
+﻿<Window x:Class="Email_Lookup_WPF.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:Email_Lookup_WPF"
+        mc:Ignorable="d"
+        Title="MainWindow" Height="430" Width="350">
+    <Grid>
+        <Label x:Name="EmailsCheckLabel" Content="Email file:" HorizontalAlignment="Left" Margin="47,6,0,0" VerticalAlignment="Top" Width="247" Height="32"/>
+        <Button x:Name="EmailsCheckButton" Content="Select email file" Margin="116,43,116,0" VerticalAlignment="Top" Height="28" Click="EmailsCheckButton_Click"/>
+        <Button x:Name="EmailsBlacklistDomainButton" ToolTip="This will be a list of domains to ignore" Content="Select domain file" Margin="47,112,185,0" VerticalAlignment="Top" Height="28" Click="EmailsBlacklistDomainButton_Click"/>
+        <Button x:Name="EmailsBlacklistPrefixButton" ToolTip="This file will contain prefixes (everything before the @) to ignore" Content="Select prefix file" Margin="184,112,48,0" VerticalAlignment="Top" Height="28" Click="EmailsBlacklistPrefixButton_Click"/>
+        <Label x:Name="EmailsBlacklistLabel" Content="Blacklist files:" HorizontalAlignment="Left" Margin="47,75,0,0" VerticalAlignment="Top" Width="247" Height="32"/>
+        <Border BorderBrush="Black" BorderThickness="1" HorizontalAlignment="Left" Height="187" Margin="49,155,0,0" VerticalAlignment="Top" Width="247">
+            <ListBox x:Name="EmailListBox"/>
+        </Border>
+        <Button x:Name="CheckEmails" Content="Check emails" Margin="100,347,92,0" Click="CheckEmails_Click" Height="32" VerticalAlignment="Top"/>
+    </Grid>
+</Window>

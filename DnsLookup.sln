@@ -5,6 +5,10 @@ VisualStudioVersion = 16.0.30611.23
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Email Lookup", "DnsLookup\Email Lookup.csproj", "{D435CCF6-BC4D-49BB-9791-C9EABD21CE3C}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Email Lookup WPF", "Email Lookup WPF\Email Lookup WPF.csproj", "{8C466BBF-91E8-46F9-9D52-8C097979DF78}"
+EndProject
+Project("{54435603-DBB4-11D2-8724-00A0C9A8B90C}") = "Email Lookup setup", "Email Lookup setup\Email Lookup setup.vdproj", "{E720F2F1-27A3-4BD8-93D4-323C5DD6513F}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -15,6 +19,12 @@ Global
 		{D435CCF6-BC4D-49BB-9791-C9EABD21CE3C}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{D435CCF6-BC4D-49BB-9791-C9EABD21CE3C}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{D435CCF6-BC4D-49BB-9791-C9EABD21CE3C}.Release|Any CPU.Build.0 = Release|Any CPU
+		{8C466BBF-91E8-46F9-9D52-8C097979DF78}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{8C466BBF-91E8-46F9-9D52-8C097979DF78}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{8C466BBF-91E8-46F9-9D52-8C097979DF78}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{8C466BBF-91E8-46F9-9D52-8C097979DF78}.Release|Any CPU.Build.0 = Release|Any CPU
+		{E720F2F1-27A3-4BD8-93D4-323C5DD6513F}.Debug|Any CPU.ActiveCfg = Debug
+		{E720F2F1-27A3-4BD8-93D4-323C5DD6513F}.Release|Any CPU.ActiveCfg = Release
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
